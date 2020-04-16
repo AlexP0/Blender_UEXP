@@ -10,4 +10,4 @@ Creates a mesh in blender from a uexp (UnrealEngine) to allow for edits, then wr
 - Click RunScript
 
 ### Permissions
-Anyone is free to contribute to the project.
+Anyone is free to contribute to the project. Just ask for invite.
