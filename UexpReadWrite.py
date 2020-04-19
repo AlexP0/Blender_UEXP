@@ -137,78 +137,52 @@ def WriteMesh():
 
         
 
-#This is an attempt at finding the VertexBegin and VertexEnd offsets from an imported psk mesh
-#Not quite working because 2 vertices can share the exact same coordinates.
-#For first vertex it's not an issue since we retain the first found offset.
-#But for last, it could fail.
-
-#For now it's best to find vertex offsets manually in a hex editor.
-
-#Select psk mesh before doing this.
-def FindVertexOffsets():
+#Finds start and end offsets of vertex data
+def FindVertexOffsets(SearchOffset):
     
     startOffset = 0
     endOffset = 0
     
-    #We get the coordinates of the given vertex index.
-    def GetVertexCo(vIndex):
-        coords = []
-        obData = bpy.context.active_object.data
-        x = obData.vertices[vIndex].co[0]
-        y = obData.vertices[vIndex].co[1]
-        z = obData.vertices[vIndex].co[2]
-        coords = [x,y,z]
-        return coords
-    
-    #Get first vertex coordinates
-    firstVertexCo = GetVertexCo(0)
-    
-    #Find what the last vertex index is.
-    vertices = bpy.context.active_object.data.vertices
-    lastVert = len(vertices)-1
-    
-    #Get last vertex coordinates
-    lastVertexCo = GetVertexCo(lastVert)
-    
-    #Given the coordinates of a vertex, we try to find a match in the uexp
-    #We go through the whole file byte by byte, reading 12 bytes and comparing with our coords.
-    def SearchForVOffsets(offset,coords):
-        with open (Uexp, 'rb') as f:
-            #This holds the floats found in the uexp
-            floatTriplet=[]
+    #We go through the whole file byte by byte, 
+    #reading 12 bytes trying to find 2 sets of interlocking int
+    with open (Uexp, 'rb') as f:
+        for n in range(SearchOffset,Size):            
+            f.seek(n)
+            int1 = f.read(4)
+            intA = f.read(4)
+            int2 = f.read(4)
+            intB = f.read(4)
             
-            f.seek(offset)
-            
-            #3 times we will read 4 bytes and unpack those as floats and add to the floatTriplet[]
-            for n in range(3):
-                bData = f.read(4)
-                if len(bData)==4:
-                    fData = struct.unpack('<f',bData)                        
-                    floatTriplet.append(fData[0])
-           
-            #Check if found floats are equal to coords floats
-            if floatTriplet == coords:                
-                return offset
+            if len(intA)==4:
+                itemsize = struct.unpack('<i',int1)
+                #print(itemsize)
+                vertcount = struct.unpack('<i',intA)
+                
+                if itemsize[0] == 12 and vertcount[0] > 3:
+                    if int1 == int2 and intA == intB:
+                        vdatalength = itemsize[0]*vertcount[0]
+                        if vdatalength < Size-n:
+                            f.seek(vdatalength,1)
+                            offset = f.tell()
+                            #print(offset)
+                            #print(vdatalength,itemsize[0],vertcount[0])
+                            f.seek(6,1)
+                            bdata = f.read(4)
+                            if bdata == intA:
+                                startOffset = n+16
+                                endOffset = offset
+                                break
             else:
-                return 0
-    
-    #This controls the SearchForVOffsets function, give it the needed offset. 
-    for n in range(Size):
-        #Here we supply the coordinates of the FIRST Vertex
-        startOffset = SearchForVOffsets(n,firstVertexCo)
-        #Break out of the loop if we find the offset
-        if startOffset != 0:
-            print(startOffset)
-            break
-    
-    #We do it all again to find the offset of the last vertex coords
-    for n in range(Size):
-        startOffset = SearchForVOffsets(n,lastVertexCo)
-        if endOffset != 0:
-            print(endOffset)
-            break
-        
+                print("LOD not found")
+                break
+                
+    print(startOffset, endOffset)            
     return startOffset, endOffset
+
+LOD0vStart,LOD0vEnd = FindVertexOffsets(0)
+LOD1vStart,LOD1vEnd = FindVertexOffsets(LOD0vStart)
+LOD2vStart,LOD2vEnd = FindVertexOffsets(LOD1vStart)
+LOD3vStart,LOD3vEnd = FindVertexOffsets(LOD2vStart)
 
 
 #This was an attempt at finding face data, did not work at all. 
