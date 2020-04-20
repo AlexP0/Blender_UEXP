@@ -1,3 +1,14 @@
+bl_info = {
+    "name": "Uexp Editor",
+    "author": "AlexPo",
+    "location": "Properties > Scene Properties > Uexp Panel",
+    "version": (1, 0, 0),
+    "blender": (2, 80, 0),
+    "description": "Creates a point cloud from uexp vertex data to allow modification, and writes the modified coordinates back in the uexp",
+    "category": "Import-Export"
+    }
+
+
 import bpy
 import bmesh
 
@@ -13,15 +24,6 @@ from bpy_extras.io_utils import ImportHelper
 #Once the mesh edited we do the opposite
 #Get the float coordinates of a vertex and write it to the uexp as bytes.
 
-
-#Path to the uexp, needs the double \\ to work.
-#Uexp = "A:\\Fallen Order Modding\\umodel_win32\\UmodelSaved\Game\\Models\\Vehicles\\AT-ST\\Rig\\AT-ST_rig.uexp"
-#Uexp = "A:\\Fallen Order Modding\\ModCalFace\\SwGame\\Content\\Characters\\Hero\\Rig\\Face\\hero_rig_face.uexp"
-#Size = os.path.getsize(Uexp)
-
-#Not implemented.
-FaceBegin = 0 
-FaceEnd = 0 
 
 def ClearProperties(self,context):
     UEXPEditor = bpy.context.scene.UEXPEditor
