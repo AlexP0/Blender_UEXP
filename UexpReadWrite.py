@@ -5,6 +5,8 @@ import os
 import sys
 import struct
 
+from bpy_extras.io_utils import ImportHelper
+
 #The code basically reads bytes by group of 4 to get floats. 
 #3 floats read give us the x,y,z coordinates of a vertex. 
 #We then create that vertex in a mesh, and repeat for all vertices.
@@ -13,14 +15,29 @@ import struct
 
 
 #Path to the uexp, needs the double \\ to work.
-Uexp = "A:\\Fallen Order Modding\\ModCalFace\\SwGame\\Content\\Characters\\Hero\\Rig\\Face\\hero_rig_face.uexp"
-Size = os.path.getsize(Uexp)
+#Uexp = "A:\\Fallen Order Modding\\umodel_win32\\UmodelSaved\Game\\Models\\Vehicles\\AT-ST\\Rig\\AT-ST_rig.uexp"
+#Uexp = "A:\\Fallen Order Modding\\ModCalFace\\SwGame\\Content\\Characters\\Hero\\Rig\\Face\\hero_rig_face.uexp"
+#Size = os.path.getsize(Uexp)
 
 #Not implemented.
 FaceBegin = 0 
 FaceEnd = 0 
 
+def ClearProperties(self,context):
+    UEXPEditor = bpy.context.scene.UEXPEditor
+    UEXPEditor.LOD0vStart = 0
+    UEXPEditor.LOD0vEnd = 0
+    UEXPEditor.LOD1vStart = 0
+    UEXPEditor.LOD1vEnd = 0
+    UEXPEditor.LOD2vStart = 0
+    UEXPEditor.LOD2vEnd = 0
+    UEXPEditor.LOD3vStart = 0
+    UEXPEditor.LOD3vEnd = 0
+    return None
+
 class UEXPSettings(bpy.types.PropertyGroup):
+    UexpPath : bpy.props.StringProperty(subtype='FILE_PATH', update=ClearProperties)
+    UexpSize : bpy.props.IntProperty()
     LOD0vStart: bpy.props.IntProperty()
     LOD0vEnd: bpy.props.IntProperty()
     LOD1vStart: bpy.props.IntProperty()
@@ -32,7 +49,8 @@ class UEXPSettings(bpy.types.PropertyGroup):
 
 #Read vertex data from uexp and create vertex cloud of it.
 def CreateMesh(LOD):
-    UEXPEditor = bpy.data.scenes['Scene'].UEXPEditor
+    UEXPEditor = bpy.context.scene.UEXPEditor
+    
     if LOD == 0:
         LODvStart = UEXPEditor.LOD0vStart
         LODvEnd = UEXPEditor.LOD0vEnd
@@ -51,7 +69,7 @@ def CreateMesh(LOD):
         LODsuffix="_LOD3"
     
     
-    with open (Uexp, 'rb') as f:
+    with open (UEXPEditor.UexpPath, 'rb') as f:
         #Read 4 bytes and unpack a float out of it for X, 
         #read the next 4 for Y and the next for Z
         def ReadVertex(rOffset):
@@ -106,57 +124,59 @@ def CreateMesh(LOD):
 
 
 #This is where we write the modified vertex data back into the uexp
-def WriteMesh():
-    return
+def WriteMesh(): 
+    UEXPEditor = bpy.context.scene.UEXPEditor
     
-#    #Gotta have the object as active selected for this to work
-#    CreatedMesh = bpy.context.active_object.data
+    #Gotta have the object as active selected for this to work
+    CreatedMesh = bpy.context.active_object.data
 
-#    #Returns the binary coordinates of the given vertex index. 
-#    def GetVCoords(index):
-#        
-#        #get coordinates of vertex
-#        x = CreatedMesh.vertices[index].co[0]
-#        y = CreatedMesh.vertices[index].co[1]
-#        z = CreatedMesh.vertices[index].co[2]
-#        
-#        #turn these float coordinates into bytes
-#        xb = struct.pack('<f',x)
-#        yb = struct.pack('<f',y)
-#        zb = struct.pack('<f',z)
-#        
-#        #binary vertex coordinates
-#        vb = [xb,yb,zb]
-#        
-#        #print (xb,yb,zb)
-#        return vb
-#    
-#    #Write the new binary vertex coordinates to the uexp
-#    def WriteVBin(vOffset,vBinCoords):
-#        with open (Uexp, 'rb+') as f:
-#            f.seek(vOffset)
-#            for i in vBinCoords:
-#                f.write(i)
-#        
-#        
-#    vIndex = -1
-#    #For each vertex we get its coordinates and write them to uexp.
-#    for n in range(VertexBegin, VertexEnd, 12):
-#        vIndex += 1
-#        vbCoords = GetVCoords(vIndex)
-#        WriteVBin(n,vbCoords)
+    #Returns the binary coordinates of the given vertex index. 
+    def GetVCoords(index):
+        
+        #get coordinates of vertex
+        x = CreatedMesh.vertices[index].co[0]
+        y = CreatedMesh.vertices[index].co[1]
+        z = CreatedMesh.vertices[index].co[2]
+        
+        #turn these float coordinates into bytes
+        xb = struct.pack('<f',x)
+        yb = struct.pack('<f',y)
+        zb = struct.pack('<f',z)
+        
+        #binary vertex coordinates
+        vb = [xb,yb,zb]
+        
+        #print (xb,yb,zb)
+        return vb
+    
+    #Write the new binary vertex coordinates to the uexp
+    def WriteVBin(vOffset,vBinCoords):
+        with open (UEXPEditor.UexpPath, 'rb+') as f:
+            f.seek(vOffset)
+            for i in vBinCoords:
+                f.write(i)
+        
+        
+    vIndex = -1
+    #For each vertex we get its coordinates and write them to uexp.
+    for n in range(VertexBegin, VertexEnd, 12):
+        vIndex += 1
+        vbCoords = GetVCoords(vIndex)
+        WriteVBin(n,vbCoords)
 
 
 #Finds start and end offsets of vertex data
 def FindVertexOffsets(SearchOffset):
+    UEXPEditor = bpy.context.scene.UEXPEditor
+    UEXPEditor.UexpSize = os.path.getsize(UEXPEditor.UexpPath)
     
     startOffset = 0
     endOffset = 0
     
     #We go through the whole file byte by byte, 
     #reading 12 bytes trying to find 2 sets of interlocking int
-    with open (Uexp, 'rb') as f:
-        for n in range(SearchOffset,Size):            
+    with open (UEXPEditor.UexpPath, 'rb') as f:
+        for n in range(SearchOffset,UEXPEditor.UexpSize):            
             f.seek(n)
             int1 = f.read(4)
             intA = f.read(4)
@@ -171,7 +191,7 @@ def FindVertexOffsets(SearchOffset):
                 if itemsize[0] == 12 and vertcount[0] > 3:
                     if int1 == int2 and intA == intB:
                         vdatalength = itemsize[0]*vertcount[0]
-                        if vdatalength < Size-n:
+                        if vdatalength < UEXPEditor.UexpSize-n:
                             f.seek(vdatalength,1)
                             offset = f.tell()
                             #print(offset)
@@ -271,7 +291,7 @@ def FindVertexOffsets(SearchOffset):
       
         
 def SearchLODOffsets(LOD=0):
-    UEXPEditor = bpy.data.scenes['Scene'].UEXPEditor
+    UEXPEditor = bpy.context.scene.UEXPEditor
     
     if LOD >= 0:
         UEXPEditor.LOD0vStart,UEXPEditor.LOD0vEnd = FindVertexOffsets(0)
@@ -288,6 +308,7 @@ def SearchLODOffsets(LOD=0):
 
 
 ##### PANEL UI STUFF #######
+
 
 class ImportUexp(bpy.types.Operator):
     """Creates a mesh from vertex data"""
@@ -323,6 +344,8 @@ class SearchForOffsets(bpy.types.Operator):
     """Searches the uexp for the begin and end offsets of vertex data"""
     bl_idname = "object.search_offsets"
     bl_label = "Search Vertex Offset"
+    
+    
        
     def execute(self, context):
         SearchLODOffsets(2)
@@ -340,9 +363,12 @@ class UexpPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        UEXPEditor = bpy.data.scenes['Scene'].UEXPEditor
         obj = context.object
-
+        UEXPEditor = context.scene.UEXPEditor
+        
+        row = layout.row()
+        row.prop(UEXPEditor,'UexpPath')
+            
         row = layout.row()
         row.operator("object.search_offsets", icon='ZOOM_ALL')
         
