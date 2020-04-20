@@ -113,8 +113,10 @@ def CreateMesh(LOD):
         #gotta update to confirm mesh creation
         mesh.update()
         return object
-
-    vCloud = VCloud("AT-ST"+LODsuffix, vList)
+    
+    objectprefix = os.path.split(UEXPEditor.UexpPath)[1]
+    objectprefix = objectprefix[:-5]
+    vCloud = VCloud(objectprefix+LODsuffix, vList)
     
     #We add the created object to a collection
     bpy.context.collection.objects.link(vCloud)
@@ -124,19 +126,40 @@ def CreateMesh(LOD):
 
 
 #This is where we write the modified vertex data back into the uexp
-def WriteMesh(): 
+def WriteMesh(LOD): 
     UEXPEditor = bpy.context.scene.UEXPEditor
     
+    if LOD == 0:
+        LODvStart = UEXPEditor.LOD0vStart
+        LODvEnd = UEXPEditor.LOD0vEnd
+        LODsuffix="_LOD0"
+    if LOD == 1:
+        LODvStart = UEXPEditor.LOD1vStart
+        LODvEnd = UEXPEditor.LOD1vEnd
+        LODsuffix="_LOD1"
+    if LOD == 2:
+        LODvStart = UEXPEditor.LOD2vStart
+        LODvEnd = UEXPEditor.LOD2vEnd
+        LODsuffix="_LOD2"
+    if LOD == 3:
+        LODvStart = UEXPEditor.LOD3vStart
+        LODvEnd = UEXPEditor.LOD3vEnd
+        LODsuffix="_LOD3"
+    
+    objectprefix = os.path.split(UEXPEditor.UexpPath)[1]
+    objectprefix = objectprefix[:-5]
+    objectname = objectprefix+LODsuffix
     #Gotta have the object as active selected for this to work
-    CreatedMesh = bpy.context.active_object.data
-
+    EditedMesh = bpy.data.objects[objectname].data
+    
+    
     #Returns the binary coordinates of the given vertex index. 
     def GetVCoords(index):
         
         #get coordinates of vertex
-        x = CreatedMesh.vertices[index].co[0]
-        y = CreatedMesh.vertices[index].co[1]
-        z = CreatedMesh.vertices[index].co[2]
+        x = EditedMesh.vertices[index].co[0]
+        y = EditedMesh.vertices[index].co[1]
+        z = EditedMesh.vertices[index].co[2]
         
         #turn these float coordinates into bytes
         xb = struct.pack('<f',x)
@@ -151,18 +174,17 @@ def WriteMesh():
     
     #Write the new binary vertex coordinates to the uexp
     def WriteVBin(vOffset,vBinCoords):
-        with open (UEXPEditor.UexpPath, 'rb+') as f:
-            f.seek(vOffset)
-            for i in vBinCoords:
-                f.write(i)
+        f.seek(vOffset)
+        for i in vBinCoords:
+            f.write(i)
         
-        
-    vIndex = -1
-    #For each vertex we get its coordinates and write them to uexp.
-    for n in range(VertexBegin, VertexEnd, 12):
-        vIndex += 1
-        vbCoords = GetVCoords(vIndex)
-        WriteVBin(n,vbCoords)
+    with open (UEXPEditor.UexpPath, 'rb+') as f:
+        vIndex = -1
+        #For each vertex we get its coordinates and write them to uexp.
+        for n in range(LODvStart, LODvEnd-12, 12):
+            vIndex += 1
+            vbCoords = GetVCoords(vIndex)
+            WriteVBin(n,vbCoords)
 
 
 #Finds start and end offsets of vertex data
@@ -337,7 +359,7 @@ class ExportUexp(bpy.types.Operator):
         )
         
     def execute(self, context):
-        WriteMesh()
+        WriteMesh(self.LODtoWrite)
         return {'FINISHED'}
 
 class SearchForOffsets(bpy.types.Operator):
