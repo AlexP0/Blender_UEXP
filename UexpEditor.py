@@ -25,6 +25,18 @@ from bpy_extras.io_utils import ImportHelper
 #Get the float coordinates of a vertex and write it to the uexp as bytes.
 
 
+
+
+
+#Path to the uexp, needs the double \\ to work.
+#Uexp = "A:\\Fallen Order Modding\\umodel_win32\\UmodelSaved\Game\\Models\\Vehicles\\AT-ST\\Rig\\AT-ST_rig.uexp"
+#Uexp = "A:\\Fallen Order Modding\\ModCalFace\\SwGame\\Content\\Characters\\Hero\\Rig\\Face\\hero_rig_face.uexp"
+#Size = os.path.getsize(Uexp)
+
+#Not implemented.
+FaceBegin = 0 
+FaceEnd = 0 
+
 def ClearProperties(self,context):
     UEXPEditor = bpy.context.scene.UEXPEditor
     UEXPEditor.LOD0vStart = 0
@@ -48,6 +60,20 @@ class UEXPSettings(bpy.types.PropertyGroup):
     LOD2vEnd: bpy.props.IntProperty()
     LOD3vStart: bpy.props.IntProperty()
     LOD3vEnd : bpy.props.IntProperty()
+    
+    LOD0fStart: bpy.props.IntProperty()
+    LOD0fEnd: bpy.props.IntProperty()
+    LOD0fSize: bpy.props.IntProperty()
+    LOD1fStart: bpy.props.IntProperty()
+    LOD1fEnd: bpy.props.IntProperty()
+    LOD1fSize: bpy.props.IntProperty()
+    LOD2fStart: bpy.props.IntProperty()
+    LOD2fEnd: bpy.props.IntProperty()
+    LOD2fSize: bpy.props.IntProperty()
+    LOD3fStart: bpy.props.IntProperty()
+    LOD3fEnd : bpy.props.IntProperty()
+    LOD3fSize : bpy.props.IntProperty()
+    
 
 #Read vertex data from uexp and create vertex cloud of it.
 def CreateMesh(LOD):
@@ -56,18 +82,30 @@ def CreateMesh(LOD):
     if LOD == 0:
         LODvStart = UEXPEditor.LOD0vStart
         LODvEnd = UEXPEditor.LOD0vEnd
+        LODfStart = UEXPEditor.LOD0fStart
+        LODfEnd = UEXPEditor.LOD0fEnd
+        LODfSize = UEXPEditor.LOD0fSize
         LODsuffix="_LOD0"
     if LOD == 1:
         LODvStart = UEXPEditor.LOD1vStart
         LODvEnd = UEXPEditor.LOD1vEnd
+        LODfStart = UEXPEditor.LOD1fStart
+        LODfEnd = UEXPEditor.LOD1fEnd
+        LODfSize = UEXPEditor.LOD1fSize
         LODsuffix="_LOD1"
     if LOD == 2:
         LODvStart = UEXPEditor.LOD2vStart
         LODvEnd = UEXPEditor.LOD2vEnd
+        LODfStart = UEXPEditor.LOD2fStart
+        LODfEnd = UEXPEditor.LOD2fEnd
+        LODfSize = UEXPEditor.LOD2fSize
         LODsuffix="_LOD2"
     if LOD == 3:
         LODvStart = UEXPEditor.LOD3vStart
         LODvEnd = UEXPEditor.LOD3vEnd
+        LODfStart = UEXPEditor.LOD3fStart
+        LODfEnd = UEXPEditor.LOD3fEnd
+        LODfSize = UEXPEditor.LOD3fSize
         LODsuffix="_LOD3"
     
     
@@ -89,7 +127,10 @@ def CreateMesh(LOD):
 
         vIndex = -1
         vList = []
-
+        
+#        LODvStart = 1696522
+#        LODvEnd = 2564242
+        
         #For each vertex we ask ReadVertex() to give us the coordinates.
         #We move by steps of 12 bytes (3 floats)
         for n in range(LODvStart,LODvEnd-12,12):
@@ -97,28 +138,84 @@ def CreateMesh(LOD):
             v = ReadVertex(n)
             #We add the vertex read to the vList
             vList.append(v)
-
+        
+    with open (UEXPEditor.UexpPath, 'rb') as f:         
+        def ReadFace(rOffset):
+            f.seek(rOffset)
+            
+            if LODfSize == 4:
+                bData = f.read(4)
+                v1 = struct.unpack('<i',bData)[0]
+                bData = f.read(4)
+                v2 = struct.unpack('<i',bData)[0]
+                bData = f.read(4)
+                v3 = struct.unpack('<i',bData)[0]
+                face = [v1,v2,v3]
+                return face
+                
+            if LODfSize == 2:
+                bData = f.read(2)
+                v1 = struct.unpack('<H',bData)[0]
+                bData = f.read(2)
+                v2 = struct.unpack('<H',bData)[0]
+                bData = f.read(2)
+                v3 = struct.unpack('<H',bData)[0]            
+                face = [v1,v2,v3]            
+                return face
+        
+        eList = [] #just a stand-in for edge data
+        
+        fIndex = -1
+        fList = []    
+#        LODfStart = 771572
+#        LODfEnd =  1694312
+#        LODfSize = 4
+        
+        for n in range (LODfStart,LODfEnd,LODfSize):
+            fIndex += 1
+            nface = ReadFace(n)
+            fList.append(nface)
+        
+        
+    
     #Create vertex cloud
-    def VCloud(object_name, coords, edges=[],faces=[]):
+    def VCloud(object_name, vList, eList=[],fList=[]):
         
         #Create a mesh
         mesh = bpy.data.meshes.new(object_name+"Mesh")
         #Create an object with our created mesh assigned.
         object = bpy.data.objects.new(object_name, mesh)
         
+        
+        
+        bm = bmesh.new()
+       
+        for face in fList:          
+            v1 = bm.verts.new(vList[face[0]])
+            v2 = bm.verts.new(vList[face[1]])
+            v3 = bm.verts.new(vList[face[2]])
+            
+            f1 = [v1,v2,v3]
+            print(f1)
+#            bm.faces.new(f1)
+            
+        bm.to_mesh(mesh)
+        bm.free()
+        
         #This is where we construct the mesh by supplying vertex coords, edges and faces
         #For now only coords is implemented.
-        mesh.from_pydata(coords, edges, faces)
+#        mesh.from_pydata(coords, edges, faces)
               
         object.show_name = True
         
         #gotta update to confirm mesh creation
-        mesh.update()
+#        mesh.update()
         return object
     
     objectprefix = os.path.split(UEXPEditor.UexpPath)[1]
     objectprefix = objectprefix[:-5]
-    vCloud = VCloud(objectprefix+LODsuffix, vList)
+    
+    vCloud = VCloud(objectprefix+LODsuffix, vList,eList,fList)
     
     #We add the created object to a collection
     bpy.context.collection.objects.link(vCloud)
@@ -134,18 +231,26 @@ def WriteMesh(LOD):
     if LOD == 0:
         LODvStart = UEXPEditor.LOD0vStart
         LODvEnd = UEXPEditor.LOD0vEnd
+        LODfStart = UEXPEditor.LOD0fStart
+        LODfEnd = UEXPEditor.LOD0fEnd
         LODsuffix="_LOD0"
     if LOD == 1:
         LODvStart = UEXPEditor.LOD1vStart
         LODvEnd = UEXPEditor.LOD1vEnd
+        LODfStart = UEXPEditor.LOD1fStart
+        LODfEnd = UEXPEditor.LOD1fEnd
         LODsuffix="_LOD1"
     if LOD == 2:
         LODvStart = UEXPEditor.LOD2vStart
         LODvEnd = UEXPEditor.LOD2vEnd
+        LODfStart = UEXPEditor.LOD2fStart
+        LODfEnd = UEXPEditor.LOD2fEnd
         LODsuffix="_LOD2"
     if LOD == 3:
         LODvStart = UEXPEditor.LOD3vStart
         LODvEnd = UEXPEditor.LOD3vEnd
+        LODfStart = UEXPEditor.LOD3fStart
+        LODfEnd = UEXPEditor.LOD3fEnd
         LODsuffix="_LOD3"
     
     objectprefix = os.path.split(UEXPEditor.UexpPath)[1]
@@ -236,95 +341,60 @@ def FindVertexOffsets(SearchOffset):
 
 
 
-#This was an attempt at finding face data, did not work at all. 
-#Face data should be stored as groups of 3 shorts (2 bytes representing an integer)
-#The 3 shorts represent vertex indices forming a triangle.
-#So what I did is get the face index 0 and get its 3 vertex indices and search through the uexp for them. 
-#I could not find anything even when trying with random faces.
-#even when trying with different index order.
-
 #We want to find where face data starts and end in the uexp file
-#def FindFaceOffsets():
-#    
-#    startOffset = 0
-#    endOffset = 0
-#    
-#    #From the selected object (an imported psk) we get the vertices of polygon[0] 
-#    #and the last polygon
-#    def FindFirstLastFaceVertices():
-#        
-#        polygons = bpy.context.active_object.data.polygons
-#        lastFace = len(polygons)-1
-#        
-#        vs1 = polygons[0].vertices[0]
-#        vs2 = polygons[0].vertices[1]
-#        vs3 = polygons[0].vertices[2]
-#        fStart = [vs1,vs2,vs3]
-#        
-#        ve1 = polygons[lastFace].vertices[0]
-#        ve2 = polygons[lastFace].vertices[1]
-#        ve3 = polygons[lastFace].vertices[2]
-#        fEnd = [ve1,ve2,ve3]
-#        
-#        print(fStart, "...", fEnd)
-#        
-#        return fStart,fEnd
-#    
-#    fStart,fEnd = FindFirstLastFaceVertices()
-#    
-#    #read the entire file by block of 3 for each offset 
-#    #and see if we match our vertice indices.
-#    def SearchForIndices(offset,vGroup):
-#        with open (Uexp, 'rb') as f:
-#            
-#            intTriplet=[]
-#            
-#            f.seek(offset)
-#            
-#            #3 times we will read 2 bytes to unpack as a short (integer) 
-#            for n in range(3):
-#                bData = f.read(2)
-#                if len(bData)==2:
-#                    iData = struct.unpack('<H',bData)                        
-#                    intTriplet.append(iData[0])
-#           
-#            #print(intTriplet, "     ", vGroup)
-#            if intTriplet == vGroup:                
-#                return offset
-#            else:
-#                return 0
-#        
-#        
-#    
-#    #This controls the SearchForIndices function, gives it the needed offset. 
-#    for n in range (Size):
-#        #Here we supply the indices of the FIRST face
-#        startOffset = SearchForIndices(n,fStart)
-#        #Break out of the loop if we find the offset
-#        if startOffset != 0:
-#            print(startOffset)
-#            break
-
-#    #We do it all again to find the offset of the last face    
-#    for n in range (Size):
-#        endOffset = SearchForIndices(n,fEnd)
-#        if endOffset != 0:
-#            print(endOffset)
-#            break
+def FindFaceOffsets(vStart,vEnd):
+    UEXPEditor = bpy.context.scene.UEXPEditor
+    
+    startOffset = 0
+    endOffset = 0
+    
+    int02 = b'\x00\x00\x00\x02\x02\x00\x00\x00'
+    int04 = b'\x00\x00\x00\x04\x04\x00\x00\x00'
+    
+    vCount = (vEnd - vStart)/12
+    print(vCount)
+    if vCount > 65535:
+        byteSearch = int04
+        itemSize = 4
+    else:
+        byteSearch = int02
+        itemSize = 2    
+    
+    with open (UEXPEditor.UexpPath, 'rb') as f:
+    
+        for n in range(vStart,0,-1):
+            f.seek(n)
+            bData = f.read(8) 
+            if bData == byteSearch:
+                startOffset = n+12 #12 is to get past the 8 bytes we were search for and the next 4 which indicate vertex index count
+                break
+                
+        if startOffset != 0:
+            f.seek(startOffset-4)
+            bindexCount = f.read(4)
+            iCount = struct.unpack('<i',bindexCount)[0]
+            fDataSize = iCount * itemSize
+            endOffset = startOffset + fDataSize - (3*itemSize)
+    
+    print(startOffset, endOffset, itemSize)
+    return startOffset, endOffset, itemSize
         
-      
         
 def SearchLODOffsets(LOD=0):
     UEXPEditor = bpy.context.scene.UEXPEditor
     
     if LOD >= 0:
         UEXPEditor.LOD0vStart,UEXPEditor.LOD0vEnd = FindVertexOffsets(0)
+        UEXPEditor.LOD0fStart,UEXPEditor.LOD0fEnd,UEXPEditor.LOD0fSize  = FindFaceOffsets(UEXPEditor.LOD0vStart,UEXPEditor.LOD0vEnd)
     if LOD >= 1:
         UEXPEditor.LOD1vStart,UEXPEditor.LOD1vEnd = FindVertexOffsets(UEXPEditor.LOD0vStart)
+        UEXPEditor.LOD1fStart,UEXPEditor.LOD1fEnd,UEXPEditor.LOD1fSize = FindFaceOffsets(UEXPEditor.LOD1vStart,UEXPEditor.LOD1vEnd)
     if LOD >= 2:
         UEXPEditor.LOD2vStart,UEXPEditor.LOD2vEnd = FindVertexOffsets(UEXPEditor.LOD1vStart)
+        UEXPEditor.LOD2fStart,UEXPEditor.LOD2fEnd,UEXPEditor.LOD2fSize = FindFaceOffsets(UEXPEditor.LOD2vStart,UEXPEditor.LOD2vEnd)
     if LOD >= 3:
         UEXPEditor.LOD3vStart,UEXPEditor.LOD3vEnd = FindVertexOffsets(UEXPEditor.LOD2vStart)
+        UEXPEditor.LOD3fStart,UEXPEditor.LOD3fEnd,UEXPEditor.LOD3fSize = FindFaceOffsets(UEXPEditor.LOD3vStart,UEXPEditor.LOD3vEnd)
     
     return {'FINISHED'}
 
