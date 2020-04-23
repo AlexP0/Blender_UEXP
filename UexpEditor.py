@@ -2,7 +2,7 @@ bl_info = {
     "name": "Uexp Editor",
     "author": "AlexPo",
     "location": "Properties > Scene Properties > Uexp Panel",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (2, 80, 0),
     "description": "Creates a point cloud from uexp vertex data to allow modification, and writes the modified coordinates back in the uexp",
     "category": "Import-Export"
