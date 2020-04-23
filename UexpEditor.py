@@ -25,18 +25,6 @@ from bpy_extras.io_utils import ImportHelper
 #Get the float coordinates of a vertex and write it to the uexp as bytes.
 
 
-
-
-
-#Path to the uexp, needs the double \\ to work.
-#Uexp = "A:\\Fallen Order Modding\\umodel_win32\\UmodelSaved\Game\\Models\\Vehicles\\AT-ST\\Rig\\AT-ST_rig.uexp"
-#Uexp = "A:\\Fallen Order Modding\\ModCalFace\\SwGame\\Content\\Characters\\Hero\\Rig\\Face\\hero_rig_face.uexp"
-#Size = os.path.getsize(Uexp)
-
-#Not implemented.
-FaceBegin = 0 
-FaceEnd = 0 
-
 def ClearProperties(self,context):
     UEXPEditor = bpy.context.scene.UEXPEditor
     UEXPEditor.LOD0vStart = 0
@@ -75,7 +63,7 @@ class UEXPSettings(bpy.types.PropertyGroup):
     LOD3fSize : bpy.props.IntProperty()
     
 
-#Read vertex data from uexp and create vertex cloud of it.
+#Read vertex data and face data from uexp and create mesh of it.
 def CreateMesh(LOD):
     UEXPEditor = bpy.context.scene.UEXPEditor
     
@@ -125,16 +113,11 @@ def CreateMesh(LOD):
             v = [x,y,z]
             return v
 
-        vIndex = -1
         vList = []
-        
-#        LODvStart = 1696522
-#        LODvEnd = 2564242
-        
+           
         #For each vertex we ask ReadVertex() to give us the coordinates.
         #We move by steps of 12 bytes (3 floats)
-        for n in range(LODvStart,LODvEnd-12,12):
-            vIndex += 1
+        for n in range(LODvStart,LODvEnd,12):   
             v = ReadVertex(n)
             #We add the vertex read to the vList
             vList.append(v)
@@ -143,7 +126,7 @@ def CreateMesh(LOD):
         def ReadFace(rOffset):
             f.seek(rOffset)
             
-            if LODfSize == 4:
+            if LODfSize == 12:
                 bData = f.read(4)
                 v1 = struct.unpack('<i',bData)[0]
                 bData = f.read(4)
@@ -153,7 +136,7 @@ def CreateMesh(LOD):
                 face = [v1,v2,v3]
                 return face
                 
-            if LODfSize == 2:
+            if LODfSize == 6:
                 bData = f.read(2)
                 v1 = struct.unpack('<H',bData)[0]
                 bData = f.read(2)
@@ -165,51 +148,44 @@ def CreateMesh(LOD):
         
         eList = [] #just a stand-in for edge data
         
-        fIndex = -1
         fList = []    
-#        LODfStart = 771572
-#        LODfEnd =  1694312
-#        LODfSize = 4
         
         for n in range (LODfStart,LODfEnd,LODfSize):
-            fIndex += 1
             nface = ReadFace(n)
             fList.append(nface)
-        
-        
     
     #Create vertex cloud
     def VCloud(object_name, vList, eList=[],fList=[]):
-        
+              
         #Create a mesh
         mesh = bpy.data.meshes.new(object_name+"Mesh")
         #Create an object with our created mesh assigned.
         object = bpy.data.objects.new(object_name, mesh)
-        
-        
-        
+              
         bm = bmesh.new()
-       
+    
         for face in fList:          
-            v1 = bm.verts.new(vList[face[0]])
-            v2 = bm.verts.new(vList[face[1]])
-            v3 = bm.verts.new(vList[face[2]])
+            v1i = face[0]        
+            v1co = vList[v1i]
+            v1 = bm.verts.new(v1co)
+
+            v2i = face[1]
+            v2co = vList[v2i]
+            v2 = bm.verts.new(v2co)
             
+            v3i = face[2]
+            v3co = vList[v3i]
+            v3 = bm.verts.new(v3co)
+
             f1 = [v1,v2,v3]
-            print(f1)
-#            bm.faces.new(f1)
-            
+            bm.faces.new(f1)
+                    
         bm.to_mesh(mesh)
         bm.free()
-        
-        #This is where we construct the mesh by supplying vertex coords, edges and faces
-        #For now only coords is implemented.
-#        mesh.from_pydata(coords, edges, faces)
-              
+       
         object.show_name = True
-        
-        #gotta update to confirm mesh creation
-#        mesh.update()
+       
+        mesh.update()
         return object
     
     objectprefix = os.path.split(UEXPEditor.UexpPath)[1]
@@ -219,8 +195,6 @@ def CreateMesh(LOD):
     
     #We add the created object to a collection
     bpy.context.collection.objects.link(vCloud)
-
-    
 
 
 
@@ -314,17 +288,13 @@ def FindVertexOffsets(SearchOffset):
             
             if len(intA)==4:
                 itemsize = struct.unpack('<i',int1)
-                #print(itemsize)
                 vertcount = struct.unpack('<i',intA)
-                
                 if itemsize[0] == 12 and vertcount[0] > 3:
                     if int1 == int2 and intA == intB:
                         vdatalength = itemsize[0]*vertcount[0]
                         if vdatalength < UEXPEditor.UexpSize-n:
                             f.seek(vdatalength,1)
                             offset = f.tell()
-                            #print(offset)
-                            #print(vdatalength,itemsize[0],vertcount[0])
                             f.seek(6,1)
                             bdata = f.read(4)
                             if bdata == intA:
@@ -352,13 +322,12 @@ def FindFaceOffsets(vStart,vEnd):
     int04 = b'\x00\x00\x00\x04\x04\x00\x00\x00'
     
     vCount = (vEnd - vStart)/12
-    print(vCount)
     if vCount > 65535:
         byteSearch = int04
         itemSize = 4
     else:
         byteSearch = int02
-        itemSize = 2    
+        itemSize = 2  
     
     with open (UEXPEditor.UexpPath, 'rb') as f:
     
@@ -376,7 +345,7 @@ def FindFaceOffsets(vStart,vEnd):
             fDataSize = iCount * itemSize
             endOffset = startOffset + fDataSize - (3*itemSize)
     
-    print(startOffset, endOffset, itemSize)
+    itemSize = itemSize * 3
     return startOffset, endOffset, itemSize
         
         
